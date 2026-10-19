@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+    <title>NSFW Images</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/gallery.css">
+    <link rel="stylesheet" href="/styles/nsfw.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: false, known_faces: [] }) %>
+    <div class="page-content">
+        <div class="controls">
+            <label for="minScore">Min score</label>
+            <input id="minScore" type="range" min="0.2" max="1" step="0.05" value="0.5">
+            <span id="minScoreValue" class="score-value">0.50</span>
+            <select id="labelSelect">
+                <option value="">All labels</option>
+                <option value="FEMALE_BREAST_EXPOSED">Female breast exposed</option>
+                <option value="FEMALE_GENITALIA_EXPOSED">Female genitalia exposed</option>
+                <option value="MALE_GENITALIA_EXPOSED">Male genitalia exposed</option>
+                <option value="BUTTOCKS_EXPOSED">Buttocks exposed</option>
+                <option value="ANUS_EXPOSED">Anus exposed</option>
+            </select>
+            <span id="status" class="nsfw-status"></span>
+        </div>
+
+        <div class="gallery-container" id="gallery"></div>
+    </div>
+
+    <script>
+    let currentPage = 0;
+    let isLoading = false;
+    let hasMore = true;
+    let shown = 0;
+    let requestId = 0;
+    const minScore = document.getElementById("minScore");
+    const minScoreValue = document.getElementById("minScoreValue");
+    const labelSelect = document.getElementById("labelSelect");
+    const statusEl = document.getElementById("status");
+    const gallery = document.getElementById("gallery");
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("min")) minScore.value = urlParams.get("min");
+    if (urlParams.get("label")) labelSelect.value = urlParams.get("label");
+    minScoreValue.textContent = Number(minScore.value).toFixed(2);
+
+    function syncUrl() {
+        const params = new URLSearchParams();
+        params.set("min", minScore.value);
+        if (labelSelect.value) params.set("label", labelSelect.value);
+        history.replaceState(null, "", `/nsfw?${params}`);
+    }
+
+    function buildItem(img) {
+        const div = document.createElement("div");
+        div.className = "gallery-item";
+
+        const link = document.createElement("a");
+        link.href = `/media/${encodeURIComponent(img.path)}`;
+        link.target = "_blank";
+        const image = document.createElement("img");
+        image.src = `/thumb/${img.id}?w=600`;
+        image.loading = "lazy";
+        link.appendChild(image);
+        div.appendChild(link);
+
+        const info = document.createElement("div");
+        info.className = "nsfw-info";
+        const score = document.createElement("span");
+        score.className = "nsfw-score";
+        score.textContent = Number(img.nsfw_score).toFixed(2);
+        const pathEl = document.createElement("span");
+        pathEl.textContent = img.path;
+        info.append(score, pathEl);
+        div.appendChild(info);
+
+        const tray = document.createElement("div");
+        tray.className = "label-tray";
+        (img.nsfw_labels || []).forEach(l => {
+            const tag = document.createElement("span");
+            tag.className = "tag";
+            tag.textContent = l;
+            tray.appendChild(tag);
+        });
+        div.appendChild(tray);
+        return div;
+    }
+
+    async function loadPage(reset = false) {
+        if (reset) {
+            requestId++;
+            currentPage = 0;
+            hasMore = true;
+            isLoading = false;
+            shown = 0;
+            gallery.innerHTML = "";
+            statusEl.textContent = "";
+        }
+        if (isLoading || !hasMore) return;
+        isLoading = true;
+        // Ignore responses from a request made before the filters changed
+        const myRequest = requestId;
+
+        try {
+            const params = new URLSearchParams({ page: currentPage, min: minScore.value });
+            if (labelSelect.value) params.set("label", labelSelect.value);
+            const res = await fetch(`/api/nsfw?${params}`);
+            const data = await res.json();
+            if (myRequest !== requestId) return;
+
+            if (!res.ok) {
+                hasMore = false;
+                statusEl.textContent = data.error || "Failed to load images";
+                return;
+            }
+            if (data.length === 0) {
+                hasMore = false;
+                statusEl.textContent = shown === 0 ? "No images match" : `${shown} images`;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            data.forEach(img => fragment.appendChild(buildItem(img)));
+            gallery.appendChild(fragment);
+            shown += data.length;
+            statusEl.textContent = `${shown}+ images`;
+            currentPage++;
+        } catch (e) {
+            console.error("Fetch failed", e);
+        } finally {
+            if (myRequest === requestId) isLoading = false;
+        }
+    }
+
+    window.onscroll = () => {
+        const scrollBottom = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+        if (scrollBottom < 500) loadPage();
+    };
+
+    minScore.oninput = () => {
+        minScoreValue.textContent = Number(minScore.value).toFixed(2);
+        clearTimeout(window.scoreDelay);
+        window.scoreDelay = setTimeout(() => {
+            syncUrl();
+            loadPage(true);
+        }, 300);
+    };
+    labelSelect.onchange = () => {
+        syncUrl();
+        loadPage(true);
+    };
+
+    syncUrl();
+    loadPage(true);
+    </script>
+</body>
+</html>

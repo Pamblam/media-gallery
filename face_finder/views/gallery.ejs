@@ -1,0 +1,276 @@
+<!doctype html>
+<html>
+<head>
+    <title>Face Gallery</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/gallery.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: true, known_faces }) %>
+    <div class="page-content">
+        <div class="controls">
+            <a href="/faceid" style="text-decoration: none;">🏠</a>
+            <select id="filterSelect">
+                <option value="all">All Images</option>
+                <option value="unseen">Unseen</option>
+                <option value="unseen_unlabeled">Unseen & Unlabeled</option>
+                <option value="skipped">Skipped</option>
+                <option value="manually_labeled">Manually Labeled</option>
+                <option value="auto_labeled">Auto Labeled</option>
+            </select>
+            <div class="toolbar">
+                <button id="createDatasetBtn" class="btn-primary" type="button">Create Dataset</button>
+            </div>
+        </div>
+
+        <div class="gallery-container" id="gallery"></div>
+        <div id="sentinel" style="clear: both; height: 10px;"></div>
+    </div>
+
+    <div class="modal-backdrop" id="datasetModal">
+        <div class="modal">
+            <h2>Create Dataset</h2>
+            <div class="field">
+                <label for="datasetName">Dataset name</label>
+                <input id="datasetName" type="text" placeholder="Enter dataset name">
+            </div>
+            <div class="progress hidden" id="datasetProgress">
+                <div class="progress-bar" id="datasetProgressBar"></div>
+            </div>
+            <div class="actions">
+                <button type="button" class="btn-secondary" id="datasetCancel">Cancel</button>
+                <button type="button" class="btn-primary" id="datasetOk">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let currentPage = 0;
+    let isLoading = false;
+    let hasMore = true;
+    const renderedIds = new Set();
+    const createDatasetBtn = document.getElementById("createDatasetBtn");
+    const datasetModal = document.getElementById("datasetModal");
+    const datasetNameInput = document.getElementById("datasetName");
+    const datasetOk = document.getElementById("datasetOk");
+    const datasetCancel = document.getElementById("datasetCancel");
+    const datasetProgress = document.getElementById("datasetProgress");
+    const datasetProgressBar = document.getElementById("datasetProgressBar");
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("filter")) {
+        filterSelect.value = urlParams.get("filter");
+    }
+    if (urlParams.get("name")) {
+        nameInput.value = urlParams.get("name");
+    }
+
+    function setPageBusy(isBusy) {
+        document.body.classList.toggle("is-busy", isBusy);
+        document.querySelectorAll("button, input, select, textarea").forEach(el => {
+            if (datasetModal.contains(el)) return;
+            if (isBusy) {
+                el.dataset.prevDisabled = el.disabled ? "1" : "0";
+                el.disabled = true;
+            } else if (el.dataset.prevDisabled === "0") {
+                el.disabled = false;
+                delete el.dataset.prevDisabled;
+            }
+        });
+    }
+
+    function openDatasetModal() {
+        datasetModal.classList.add("is-open");
+        datasetProgress.classList.add("hidden");
+        datasetProgressBar.style.width = "0%";
+        datasetNameInput.value = nameInput.value.trim()
+            ? `${nameInput.value.trim()} Dataset`
+            : "";
+        datasetNameInput.focus();
+    }
+
+    function closeDatasetModal() {
+        datasetModal.classList.remove("is-open");
+        datasetProgress.classList.add("hidden");
+        datasetProgressBar.style.width = "0%";
+        datasetNameInput.value = "";
+    }
+
+    function updateDatasetButtonState() {
+        const hasName = nameInput.value.trim().length > 0;
+        createDatasetBtn.disabled = !hasName;
+    }
+
+    function syncUrl() {
+        const params = new URLSearchParams();
+        if (filterSelect.value && filterSelect.value !== "all") {
+            params.set("filter", filterSelect.value);
+        }
+        if (nameInput.value.trim()) {
+            params.set("name", nameInput.value.trim());
+        }
+        const query = params.toString();
+        const nextUrl = query ? `/?${query}` : "/";
+        window.history.replaceState({}, "", nextUrl);
+    }
+
+    async function loadPage(reset = false) {
+        if (isLoading || (!hasMore && !reset)) return;
+        isLoading = true;
+
+        if (reset) {
+            currentPage = 0;
+            hasMore = true;
+            renderedIds.clear();
+            document.getElementById('gallery').innerHTML = '';
+        }
+
+        try {
+            const url = `/api/all?page=${currentPage}&filter=${filterSelect.value}&name=${encodeURIComponent(nameInput.value)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data || data.length === 0) {
+                hasMore = false;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            data.forEach(img => {
+                const dedupeKey = img.media_path || String(img.image_id);
+                if (renderedIds.has(dedupeKey)) return;
+                renderedIds.add(dedupeKey);
+
+                const div = document.createElement('div');
+                div.className = 'gallery-item';
+                div.innerHTML = `
+                    <a href="/faceid?id=${img.first_face_id}">
+                        <img src="/media/${encodeURIComponent(img.media_path)}" loading="lazy">
+                    </a>
+                    <div style="padding: 8px 10px; font-size: 12px; color: #64748b;">
+                        <div>${img.media_path}</div>
+                        <div>Image ID: ${img.image_id}</div>
+                    </div>
+                    <div class="label-tray">
+                        ${(img.face_labels || []).map(fl => `<a class="tag" href="/faceid?id=${fl.face_id}">${fl.name}</a>`).join('')}
+                    </div>
+                `;
+                fragment.appendChild(div);
+            });
+
+            document.getElementById('gallery').appendChild(fragment);
+            currentPage++; // Increment to next page for the next request
+
+        } catch (e) {
+            console.error("Fetch failed", e);
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    // Standard scroll detection: Trigger when 500px from the bottom
+    window.onscroll = () => {
+        const scrollBottom = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+        if (scrollBottom < 500) {
+            loadPage();
+        }
+    };
+
+    // Filter resets
+    filterSelect.onchange = () => {
+        syncUrl();
+        loadPage(true);
+    };
+    nameInput.oninput = () => {
+        clearTimeout(window.searchDelay);
+        window.searchDelay = setTimeout(() => {
+            syncUrl();
+            loadPage(true);
+        }, 300);
+        updateDatasetButtonState();
+    };
+
+    // Initial load
+    syncUrl();
+    loadPage(true);
+    updateDatasetButtonState();
+
+    window.addEventListener('load', () => {
+        nameInput.focus();
+    });
+
+    createDatasetBtn.addEventListener("click", () => {
+        if (createDatasetBtn.disabled) return;
+        openDatasetModal();
+    });
+
+    datasetCancel.addEventListener("click", () => {
+        closeDatasetModal();
+    });
+
+    datasetOk.addEventListener("click", async () => {
+        const datasetName = datasetNameInput.value.trim();
+        const faceName = nameInput.value.trim();
+
+        if (!faceName) {
+            alert("Filter by a name first.");
+            return;
+        }
+        if (!datasetName) {
+            alert("Please enter a dataset name.");
+            return;
+        }
+
+        setPageBusy(true);
+        datasetOk.disabled = true;
+        datasetCancel.disabled = true;
+        datasetProgress.classList.remove("hidden");
+
+        try {
+            const res = await fetch("/datasets", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: datasetName, faceName })
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to start dataset creation");
+            }
+
+            const { jobId } = await res.json();
+            if (!jobId) throw new Error("Missing job id");
+
+            let done = false;
+            while (!done) {
+                const statusRes = await fetch(`/datasets/${jobId}/status`);
+                if (!statusRes.ok) {
+                    throw new Error("Failed to fetch status");
+                }
+                const status = await statusRes.json();
+                const percent = status.total > 0
+                    ? Math.round((status.completed / status.total) * 100)
+                    : 100;
+                datasetProgressBar.style.width = `${percent}%`;
+
+                if (status.status === "completed") {
+                    done = true;
+                } else if (status.status === "error") {
+                    throw new Error(status.error || "Dataset creation failed");
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 600));
+                }
+            }
+
+            closeDatasetModal();
+        } catch (err) {
+            console.error(err);
+            alert("Dataset creation failed. Check server logs for details.");
+        } finally {
+            setPageBusy(false);
+            datasetOk.disabled = false;
+            datasetCancel.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>

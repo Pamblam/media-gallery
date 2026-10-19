@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Face Labeler</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/faceid.css">
+</head>
+<body>
+
+    <%- include("partials/nav", { show_search: true, known_faces }) %>
+
+    <div class="top-bar">
+		<header>
+			<h2>Label Face</h2>
+			<div style="font-size: 10px; color: #94a3b8; font-family: monospace;"><%= media_path %></div>
+            <div style="font-size: 11px; color: #64748b;">Faces in image: <%= face_count %></div>
+			<div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
+				<label for="modeSelect" style="font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase;">Mode</label>
+				<select id="modeSelect">
+					<option value="all-unseen" <%= mode === "all-unseen" ? "selected" : "" %>>All unseen</option>
+					<option value="all-unlabeled" <%= mode === "all-unlabeled" ? "selected" : "" %>>All unlabeled</option>
+				</select>
+				<div style="font-size: 11px; color: #64748b;">Matching media: <%= matching_media_count %></div>
+			</div>
+		</header>
+
+		<div class="form-inline">
+			<form id="labelForm" method="POST" action="/label" style="display: flex; gap: 12px; align-items: flex-end;">
+				<input type="hidden" name="face_id" value="<%= face_id %>">
+				<input type="hidden" name="mode" value="<%= mode %>">
+				
+				<div class="input-group">
+					<label>Person Name</label>
+					<input 
+						name="name" 
+						id="nameInput" 
+						list="faces" 
+						placeholder="Type name or Enter to skip..." 
+						autocomplete="off"
+						value="<%= current_name || (auto_assigned ? auto_name : '') %>"
+						style="width: 300px;"
+					>
+					<datalist id="faces">
+						<% known_faces.forEach(k => { %>
+							<option value="<%= k.name %>">
+						<% }) %>
+					</datalist>
+				</div>
+
+				<button type="submit" class="btn-primary">Save + Next</button>
+			</form>
+
+			<form id="skipForm" method="POST" action="/skip" style="display: flex; align-items: flex-end;">
+				<input type="hidden" name="face_id" value="<%= face_id %>">
+				<input type="hidden" name="mode" value="<%= mode %>">
+				<button type="submit" class="btn-secondary">Skip</button>
+			</form>
+
+			<form id="skipImageForm" method="POST" action="/skip-image" style="display: flex; align-items: flex-end;">
+				<input type="hidden" name="face_id" value="<%= face_id %>">
+				<input type="hidden" name="mode" value="<%= mode %>">
+				<button type="submit" class="btn-secondary">Skip All in Image</button>
+			</form>
+
+			<% if (auto_assigned && auto_name) { %>
+				<div style="display: flex; align-items: flex-end; padding-bottom: 4px;">
+					<div class="auto-badge">Suggested: <%= auto_name %></div>
+				</div>
+			<% } %>
+		</div>
+	</div>
+
+    <main class="main-content">
+        <div class="image-grid">
+            <div class="card">
+                <div class="card-label">CROP</div>
+                <canvas id="faceCanvas"></canvas>
+            </div>
+
+            <div class="card">
+                <div class="card-label">REFERENCE</div>
+                <img id="fullImg" src="/media/<%= media_path %>" />
+            </div>
+        </div>
+    </main>
+
+	<% if (faces_in_image && faces_in_image.length) { %>
+		<section class="other-faces">
+			<h3>Other faces in this image</h3>
+			<div class="face-strip">
+				<% let otherCount = 0; %>
+				<% faces_in_image.forEach(f => { %>
+					<% if (f.face_id !== face_id) { %>
+						<% otherCount++; %>
+						<div class="face-item">
+							<canvas
+								class="face-thumb"
+								data-bbox='<%= JSON.stringify(f.bbox) %>'
+							></canvas>
+							<a class="face-name-link" href="/faceid?id=<%= f.face_id %>&mode=<%= mode %>">
+								<div class="face-name"><%= f.known_name || "unknown" %></div>
+							</a>
+						</div>
+					<% } %>
+				<% }) %>
+				<% if (otherCount === 0) { %>
+					<div class="face-name">No other faces in this image.</div>
+				<% } %>
+			</div>
+		</section>
+	<% } %>
+
+	<script>
+		const nameInput = document.getElementById('nameInput');
+		const labelForm = document.getElementById('labelForm');
+		const skipForm = document.getElementById('skipForm');
+		const modeSelect = document.getElementById('modeSelect');
+
+    	window.onload = () => nameInput.focus();
+
+		labelForm.addEventListener('submit', (e) => {
+			if (nameInput.value.trim() === "") {
+				e.preventDefault();
+				skipForm.submit();
+			}
+		});
+
+		if (modeSelect) {
+			modeSelect.addEventListener('change', () => {
+				const nextMode = encodeURIComponent(modeSelect.value);
+				window.location.href = `/faceid?mode=${nextMode}`;
+			});
+		}
+
+		const bbox = <%- JSON.stringify(bbox) %>;
+		const img = new Image();
+		img.src = "/media/<%= media_path %>";
+
+		const drawFace = (canvas, faceBox, maxWidth) => {
+			const ctx = canvas.getContext("2d");
+			const x = Math.max(0, faceBox.x|0);
+			const y = Math.max(0, faceBox.y|0);
+			const w = Math.max(1, faceBox.w|0);
+			const h = Math.max(1, faceBox.h|0);
+			const displayWidth = Math.min(w, maxWidth);
+			const scale = displayWidth / w;
+
+			canvas.width = displayWidth;
+			canvas.height = Math.max(1, h * scale);
+			ctx.drawImage(img, x, y, w, h, 0, 0, canvas.width, canvas.height);
+		};
+
+		img.onload = () => {
+			const c = document.getElementById("faceCanvas");
+			drawFace(c, bbox, 300);
+
+			document.querySelectorAll(".face-thumb").forEach((canvas) => {
+				const data = canvas.dataset.bbox;
+				if (!data) return;
+				try {
+					const faceBox = JSON.parse(data);
+					drawFace(canvas, faceBox, 90);
+				} catch (_err) {
+					return;
+				}
+			});
+		};
+
+		window.onload = () => nameInput.focus();
+
+		window.addEventListener('pageshow', (event) => {
+			const nameInput = document.getElementById('nameInput');
+			<% if (!auto_assigned && !current_name) { %>
+				nameInput.value = "";
+			<% } %>
+			nameInput.focus();
+		});
+
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') {
+				document.getElementById('nameInput').value = "";
+			}
+		});
+	</script>
+</body>
+</html>

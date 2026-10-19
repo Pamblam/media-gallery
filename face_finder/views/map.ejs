@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+    <title>Photo Map</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+    <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.css">
+    <link rel="stylesheet" href="/vendor/markercluster/MarkerCluster.Default.css">
+    <link rel="stylesheet" href="/styles/map.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: false, known_faces: [] }) %>
+    <div id="map"></div>
+    <div id="mapStatus" class="map-status">Loading locations…</div>
+
+    <script src="/vendor/leaflet/leaflet.js"></script>
+    <script src="/vendor/markercluster/leaflet.markercluster.js"></script>
+    <script>
+    const map = L.map("map", { worldCopyJump: true }).setView([20, 0], 2);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // chunkedLoading keeps the page responsive while tens of thousands of markers are added
+    const clusters = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: 60 });
+    map.addLayer(clusters);
+
+    const status = document.getElementById("mapStatus");
+
+    function buildPopup(media) {
+        const wrap = document.createElement("div");
+        wrap.className = "map-popup";
+
+        const link = document.createElement("a");
+        link.href = `/media/${encodeURIComponent(media.path)}`;
+        link.target = "_blank";
+        const img = document.createElement("img");
+        img.src = `/thumb/${media.id}?w=300`;
+        link.appendChild(img);
+        wrap.appendChild(link);
+
+        const date = document.createElement("div");
+        date.className = "map-popup-date";
+        date.textContent = media.original_date
+            ? new Date(media.original_date).toLocaleString()
+            : "No date";
+        wrap.appendChild(date);
+
+        const pathEl = document.createElement("div");
+        pathEl.className = "map-popup-path";
+        pathEl.textContent = media.path;
+        wrap.appendChild(pathEl);
+        return wrap;
+    }
+
+    async function openMarker(marker, id) {
+        marker.bindPopup("Loading…").openPopup();
+        try {
+            const res = await fetch(`/api/media/${id}`);
+            if (!res.ok) throw new Error(res.statusText);
+            marker.setPopupContent(buildPopup(await res.json()));
+        } catch (e) {
+            console.error(e);
+            marker.setPopupContent("Could not load image details");
+        }
+    }
+
+    async function loadPoints() {
+        try {
+            const res = await fetch("/api/map/points");
+            if (!res.ok) throw new Error(res.statusText);
+            const points = await res.json();
+
+            const markers = points.map(([id, lat, lon]) => {
+                const m = L.marker([lat, lon]);
+                m.on("click", () => openMarker(m, id));
+                return m;
+            });
+            clusters.addLayers(markers);
+
+            if (markers.length > 0) {
+                map.fitBounds(clusters.getBounds(), { padding: [30, 30] });
+            }
+            status.textContent = `${points.length.toLocaleString()} geotagged images`;
+        } catch (e) {
+            console.error(e);
+            status.textContent = "Failed to load locations";
+        }
+    }
+
+    loadPoints();
+    </script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Datasets</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/datasets.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: true, known_faces }) %>
+
+    <main class="page-content">
+        <h1>Datasets</h1>
+        <table class="datasets-table">
+            <thead>
+                <tr>
+                    <th>Dataset</th>
+                    <th>Known Face</th>
+                    <th>Images</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (!rows || rows.length === 0) { %>
+                    <tr>
+                        <td colspan="3" class="empty-cell">No datasets found.</td>
+                    </tr>
+                <% } %>
+                <% (rows || []).forEach(row => { %>
+                    <tr>
+                        <td>
+                            <a class="dataset-link" href="/datasets/<%= row.id %>"><%= row.name %></a>
+                        </td>
+                        <td><%= row.known_name || "Unknown" %></td>
+                        <td><%= row.image_count %></td>
+                        <td class="actions">
+                            <% if (row.image_count === 0) { %>
+                                <form method="POST" action="/datasets/<%= row.id %>/delete">
+                                    <button type="submit" class="btn-danger">Delete</button>
+                                </form>
+                            <% } else { %>
+                                <span class="muted">In use</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>

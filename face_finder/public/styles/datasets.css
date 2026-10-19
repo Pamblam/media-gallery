@@ -1,0 +1,75 @@
+.page-content {
+    padding: 24px;
+}
+
+h1 {
+    margin: 0 0 16px;
+    font-size: 1.5rem;
+}
+
+.datasets-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.datasets-table th,
+.datasets-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+.datasets-table thead th {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+}
+
+.datasets-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.actions {
+    text-align: right;
+}
+
+.btn-danger {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    opacity: 0.9;
+}
+
+.muted {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.dataset-link {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.dataset-link:hover {
+    text-decoration: underline;
+}
+
+.empty-cell {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+    padding: 24px;
+}

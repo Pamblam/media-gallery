@@ -1,0 +1,30 @@
+.score-value {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    min-width: 3ch;
+}
+
+.nsfw-status {
+    margin-left: auto;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.nsfw-info {
+    padding: 8px 10px 0;
+    font-size: 12px;
+    color: #64748b;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    word-break: break-all;
+}
+
+.nsfw-score {
+    background: #fee2e2;
+    color: #b91c1c;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}

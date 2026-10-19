@@ -1,0 +1,72 @@
+.dataset-header {
+    justify-content: space-between;
+}
+
+.dataset-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.dataset-meta {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+.bulk-delete {
+    margin-left: auto;
+}
+
+.bulk-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 0 24px;
+}
+
+.bulk-delete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.select-toggle {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(248, 250, 252, 0.95);
+    border: 1px solid #e2e8f0;
+    font-size: 12px;
+    color: #475569;
+    cursor: pointer;
+}
+
+.select-toggle input {
+    margin: 0;
+}
+
+.dataset-image {
+    position: relative;
+}
+
+.delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #fecaca;
+    background: rgba(254, 242, 242, 0.95);
+    color: #b91c1c;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.delete-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}

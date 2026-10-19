@@ -1,0 +1,31 @@
+<nav class="navbar">
+    <a href="/faceid">Label</a>
+    <a href="/">Gallery</a>
+    <a href="/knownfaces">Known Faces</a>
+    <a href="/datasets">Datasets</a>
+    <a href="/map">Map</a>
+    <a href="/nsfw">NSFW</a>
+    <% if (show_search) { %>
+        <input id="nameInput" list="faces" placeholder="Search by name...">
+        <datalist id="faces">
+            <% (known_faces || []).forEach(k => { %><option value="<%= k.name %>"><% }) %>
+        </datalist>
+    <% } %>
+</nav>
+<script>
+    window.addEventListener("DOMContentLoaded", () => {
+        const nameInput = document.getElementById("nameInput");
+        if (!nameInput) return;
+        nameInput.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter") return;
+            const value = nameInput.value.trim();
+            const params = new URLSearchParams();
+            if (value) {
+                params.set("name", value);
+            }
+            const query = params.toString();
+            const nextUrl = query ? `/?${query}` : "/";
+            window.location.href = nextUrl;
+        });
+    });
+</script>

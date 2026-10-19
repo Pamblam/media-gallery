@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Known Faces</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/known_faces.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: true, known_faces }) %>
+
+    <main class="page-content">
+        <h1>Known Faces</h1>
+        <table class="known-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Occurrences</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if (!rows || rows.length === 0) { %>
+                    <tr>
+                        <td colspan="3" class="empty-cell">No known faces found.</td>
+                    </tr>
+                <% } %>
+                <% (rows || []).forEach(row => { %>
+                    <tr>
+                        <td><a class="name-link" href="/?name=<%= encodeURIComponent(row.name) %>"><%= row.name %></a></td>
+                        <td><%= row.count %></td>
+                        <td class="actions">
+                            <% if (row.count === 0) { %>
+                                <form method="POST" action="/knownfaces/<%= row.id %>/delete">
+                                    <button type="submit" class="btn-danger">Delete</button>
+                                </form>
+                            <% } else { %>
+                                <span class="muted">In use</span>
+                            <% } %>
+                        </td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </main>
+</body>
+</html>

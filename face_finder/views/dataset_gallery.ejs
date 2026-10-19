@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title><%= dataset.name %> - Dataset</title>
+    <link rel="stylesheet" href="/styles/common.css">
+    <link rel="stylesheet" href="/styles/gallery.css">
+    <link rel="stylesheet" href="/styles/dataset_gallery.css">
+</head>
+<body>
+    <%- include("partials/nav", { show_search: true, known_faces }) %>
+
+    <div class="page-content">
+        <div class="controls dataset-header">
+            <div>
+                <div class="dataset-title"><%= dataset.name %></div>
+                <div class="dataset-meta">Known face: <%= dataset.known_name || "Unknown" %></div>
+            </div>
+            <button class="bulk-delete btn-secondary" type="button" id="deleteSelectedTop" disabled>Delete Selected</button>
+        </div>
+
+        <div class="gallery-container" id="gallery"></div>
+        <div id="sentinel" style="clear: both; height: 10px;"></div>
+        <div class="bulk-footer">
+            <button class="bulk-delete btn-secondary" type="button" id="deleteSelectedBottom" disabled>Delete Selected</button>
+        </div>
+    </div>
+
+    <script>
+    let currentPage = 0;
+    let isLoading = false;
+    let hasMore = true;
+    const renderedIds = new Set();
+    const datasetId = <%= dataset.id %>;
+
+    async function loadPage(reset = false) {
+        if (isLoading || (!hasMore && !reset)) return;
+        isLoading = true;
+
+        if (reset) {
+            currentPage = 0;
+            hasMore = true;
+            renderedIds.clear();
+            document.getElementById('gallery').innerHTML = '';
+        }
+
+        try {
+            const url = `/api/datasets/${datasetId}?page=${currentPage}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (!data || data.length === 0) {
+                hasMore = false;
+                return;
+            }
+
+            const fragment = document.createDocumentFragment();
+            data.forEach(img => {
+                const dedupeKey = img.filename;
+                if (renderedIds.has(dedupeKey)) return;
+                renderedIds.add(dedupeKey);
+
+                const div = document.createElement('div');
+                div.className = 'gallery-item';
+                div.innerHTML = `
+                    <div class="dataset-image">
+                        <img src="/datasets/${datasetId}/media/${encodeURIComponent(img.filename)}" loading="lazy">
+                        <label class="select-toggle">
+                            <input class="select-checkbox" type="checkbox" data-filename="${img.filename}">
+                            <span>Select</span>
+                        </label>
+                        <button class="delete-btn" type="button" data-filename="${img.filename}">Delete</button>
+                    </div>
+                    <div style="padding: 8px 10px; font-size: 12px; color: #64748b;">
+                        <div>${img.filename}</div>
+                    </div>
+                `;
+                fragment.appendChild(div);
+            });
+
+            document.getElementById('gallery').appendChild(fragment);
+            currentPage++;
+        } catch (e) {
+            console.error("Fetch failed", e);
+        } finally {
+            isLoading = false;
+        }
+    }
+
+    window.onscroll = () => {
+        const scrollBottom = document.documentElement.scrollHeight - window.innerHeight - window.scrollY;
+        if (scrollBottom < 500) {
+            loadPage();
+        }
+    };
+
+    loadPage(true);
+
+    const galleryEl = document.getElementById("gallery");
+    const deleteSelectedTop = document.getElementById("deleteSelectedTop");
+    const deleteSelectedBottom = document.getElementById("deleteSelectedBottom");
+
+    const updateBulkButtons = () => {
+        const selected = galleryEl.querySelectorAll(".select-checkbox:checked").length;
+        const disabled = selected === 0;
+        deleteSelectedTop.disabled = disabled;
+        deleteSelectedBottom.disabled = disabled;
+    };
+
+    const removeCardsByFilename = (filenames) => {
+        const set = new Set(filenames);
+        galleryEl.querySelectorAll(".select-checkbox").forEach(input => {
+            if (set.has(input.dataset.filename)) {
+                const card = input.closest(".gallery-item");
+                if (card) card.remove();
+            }
+        });
+        updateBulkButtons();
+    };
+
+    galleryEl.addEventListener("click", async (event) => {
+        const button = event.target.closest(".delete-btn");
+        if (!button) return;
+        const filename = button.dataset.filename;
+        if (!filename) return;
+        if (!window.confirm("Delete this dataset image?")) return;
+
+        button.disabled = true;
+        try {
+            const res = await fetch(`/datasets/${datasetId}/delete-file`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename })
+            });
+            if (!res.ok) {
+                throw new Error("Delete failed");
+            }
+            removeCardsByFilename([filename]);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete dataset image.");
+            button.disabled = false;
+        }
+    });
+
+    galleryEl.addEventListener("change", (event) => {
+        if (event.target.classList.contains("select-checkbox")) {
+            updateBulkButtons();
+        }
+    });
+
+    async function deleteSelected() {
+        const selected = Array.from(
+            galleryEl.querySelectorAll(".select-checkbox:checked")
+        ).map(input => input.dataset.filename);
+
+        if (selected.length === 0) return;
+        if (!window.confirm(`Delete ${selected.length} selected images?`)) return;
+
+        deleteSelectedTop.disabled = true;
+        deleteSelectedBottom.disabled = true;
+        try {
+            const res = await fetch(`/datasets/${datasetId}/delete-files`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filenames: selected })
+            });
+            if (!res.ok) {
+                throw new Error("Bulk delete failed");
+            }
+            removeCardsByFilename(selected);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete selected images.");
+            updateBulkButtons();
+        }
+    }
+
+    deleteSelectedTop.addEventListener("click", deleteSelected);
+    deleteSelectedBottom.addEventListener("click", deleteSelected);
+    </script>
+</body>
+</html>
